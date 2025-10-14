@@ -49,7 +49,7 @@ class EEGDataset(Dataset):
             self.captions = json.load(f)
 
         self.data_path = os.path.join(root, "eeg_data", data_name)
-        data = torch.load(self.data_path)
+        data = torch.load(self.data_path, map_location="cpu")
         self.dataset = data["dataset"]
         self.labels = data["labels"]
         self.image_ids = data["images"]
@@ -98,7 +98,8 @@ if __name__ == "__main__":
     indices = torch.load(
         os.path.join(
             "/home/chengwenjie/datasets/40classes-50images", "eeg_data/indices.pth"
-        )
+        ),
+        map_location="cpu",
     )
     train_dataset = Subset(dataset, indices["train"])
     eval_dataset = Subset(dataset, indices["eval"])
