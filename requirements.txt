@@ -1,0 +1,44 @@
+# 深度学习框架
+torch==2.4.1
+torchvision==0.19.1
+torchaudio==2.4.1
+
+# 数据处理
+numpy==1.26.2
+pandas==2.2.3
+scipy==1.11.4
+scikit-learn==1.6.1
+
+# 图像处理
+opencv-python==4.8.1.78
+pillow==11.1.0
+scikit-image==0.22.0
+
+# 自然语言处理
+tokenizers==0.20.3
+transformers==4.46.3
+
+# 配置文件处理
+pyyaml==6.0.2
+omegaconf==2.3.0
+
+# 进度条和可视化
+tqdm==4.66.1
+matplotlib==3.10.1
+seaborn==0.13.2
+
+# 模型加速
+accelerate==1.10.0
+bitsandbytes==0.45.5
+
+# 检索
+faiss-gpu==1.7.2
+
+# 日志和工具
+colorlog==6.9.0
+python-json-logger==3.3.0
+
+# 其他工具
+einops==0.3.0
+wandb==0.19.10
+datasets==3.5.0
