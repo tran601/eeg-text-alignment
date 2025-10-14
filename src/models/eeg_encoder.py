@@ -58,6 +58,22 @@ class EEGEncoder(nn.Module):
             self.class_head = nn.Linear(
                 config["proj_dim"], config["class_head"]["n_classes"]
             )
+        self.eeg_proj, self.text_proj = None, None
+        if config.get("proj_head", False):
+            self.eeg_proj = nn.Sequential(
+                nn.Linear(config["proj_dim"], config["proj_dim"]),
+                nn.GELU(),
+                nn.Dropout(config["dropout"]),
+                nn.Linear(config["proj_dim"], config["proj_dim"]),
+                nn.LayerNorm(config["proj_dim"]),
+            )
+            self.text_proj = nn.Sequential(
+                nn.Linear(config["proj_dim"], config["proj_dim"]),
+                nn.GELU(),
+                nn.Dropout(config["dropout"]),
+                nn.Linear(config["proj_dim"], config["proj_dim"]),
+                nn.LayerNorm(config["proj_dim"]),
+            )
 
     def forward(self, x, return_class=False):
         """
@@ -69,16 +85,24 @@ class EEGEncoder(nn.Module):
             h_eeg: EEG embedding (batch, 768)
             class_logits: 类别预测 (可选)
         """
+        x = x.unsqueeze(1)
         x = self.temporal_conv(x)
         x = self.spatial_conv(x)
         x = self.ts_conv(x)
-        x = x.squeeze()
+        x = x.flatten(1)
         h = self.proj(x)
+        h = self.eeg_proj(h) if self.eeg_proj is not None else h
         logits = None
         if self.class_head is not None and return_class:
             logits = self.class_head(h)
-        h = F.normalize(h, p=2, dim=1)
+
+        h = F.normalize(h, p=2, dim=-1)
         return h, logits
+
+    def text_projector(self, text_vector):
+        return (
+            self.text_proj(text_vector) if self.text_proj is not None else text_vector
+        )
 
 
 if __name__ == "__main__":
@@ -101,7 +125,7 @@ if __name__ == "__main__":
     # 注意：EEG数据通常形状为 (batch, channels, timepoints)
     # 但在这里，我们使用2D卷积，所以需要4D张量
     batch_size = 2
-    test_input = torch.randn(batch_size, 1, 128, 440)
+    test_input = torch.randn(batch_size, 128, 440)
 
     # 测试前向传播
     with torch.no_grad():
