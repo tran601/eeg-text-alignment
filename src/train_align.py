@@ -384,8 +384,9 @@ class AlignmentTrainer:
             top1_hit = example["topk"][0] if example["topk"] else None
             if top1_hit is not None:
                 self.logger.info(
-                    "Top-1 caption: sim=%.4f | image_id=%s | image_name=%s | %s",
+                    "Top-1 caption: sim=%.4f | caption_sim=%.4f | image_id=%s | image_name=%s | %s",
                     top1_hit["similarity"],
+                    top1_hit["caption_similarity"],
                     top1_hit["image_id"],
                     self.image_id_to_name[top1_hit["image_id"]],
                     top1_hit["caption"],
@@ -393,9 +394,10 @@ class AlignmentTrainer:
             self.logger.info("Retrieved captions:")
             for hit in example["topk"]:
                 self.logger.info(
-                    "  #%02d | sim=%.4f | image_id=%s | image_name=%s | %s",
+                    "  #%02d | sim=%.4f | caption_sim=%.4f | image_id=%s | image_name=%s | %s",
                     hit["rank"],
                     hit["similarity"],
+                    hit["caption_similarity"],
                     hit["image_id"],
                     self.image_id_to_name[hit["image_id"]],
                     hit["caption"],
@@ -448,6 +450,64 @@ class AlignmentTrainer:
         topk_values, topk_indices = similarity.topk(k=top_k, dim=1)
         retrieved_image_ids = text_image_ids[topk_indices]
 
+        caption_embedding_cache: Dict[str, torch.Tensor] = {}
+
+        def _project_captions(caption_list: List[str]) -> torch.Tensor:
+            if not caption_list:
+                return torch.empty(
+                    0,
+                    text_vectors.size(1),
+                    device=self.device,
+                    dtype=text_vectors.dtype,
+                )
+
+            new_captions = [
+                cap for cap in caption_list if cap not in caption_embedding_cache
+            ]
+            if new_captions:
+                encoded = self.text_encoder.encode_sentence(new_captions).to(
+                    self.device, dtype=text_vectors.dtype
+                )
+                for cap, emb in zip(new_captions, encoded):
+                    caption_embedding_cache[cap] = emb.detach()
+
+            stacked = torch.stack(
+                [caption_embedding_cache[cap] for cap in caption_list], dim=0
+            )
+            return F.normalize(stacked, dim=-1)
+
+        raw_text_vectors = F.normalize(self.text_corpus["text_vectors"], dim=-1)
+
+        caption_similarity_sum = 0.0
+        caption_similarity_count = 0
+        example_caption_sims: Dict[int, torch.Tensor] = {}
+
+        for idx in range(eeg_embeddings.size(0)):
+            gt_caps = captions[idx]
+            retrieved_vectors = raw_text_vectors[topk_indices[idx]]
+            if gt_caps:
+                projected_gt = _project_captions(gt_caps)
+                if projected_gt.numel() > 0 and retrieved_vectors.numel() > 0:
+                    caption_sim_matrix = torch.matmul(retrieved_vectors, projected_gt.T)
+                    per_hit_caption_sim = caption_sim_matrix.mean(dim=1)
+                else:
+                    per_hit_caption_sim = torch.zeros(
+                        retrieved_vectors.size(0),
+                        device=self.device,
+                        dtype=text_vectors.dtype,
+                    )
+            else:
+                per_hit_caption_sim = torch.zeros(
+                    retrieved_vectors.size(0),
+                    device=self.device,
+                    dtype=text_vectors.dtype,
+                )
+
+            caption_similarity_sum += per_hit_caption_sim.sum().item()
+            caption_similarity_count += per_hit_caption_sim.numel()
+            if idx < max_examples:
+                example_caption_sims[idx] = per_hit_caption_sim.detach().cpu()
+
         # 计算多项检索指标
         recall_metrics: Dict[str, float] = {}
         for k in (1, 3, 5):
@@ -458,12 +518,20 @@ class AlignmentTrainer:
             )
             recall_metrics[f"recall@{k}"] = hits_at_k.float().mean().item()
 
+        if caption_similarity_count > 0:
+            recall_metrics["avg_caption_similarity"] = (
+                caption_similarity_sum / caption_similarity_count
+            )
+        else:
+            recall_metrics["avg_caption_similarity"] = 0.0
+
         # 准备可视化样例，默认选取前 max_examples 条样本
         example_count = min(max_examples, eeg_embeddings.size(0))
         examples: List[Dict[str, Any]] = []
 
         for idx in range(example_count):
             hits = []
+            per_hit_caption_sim = example_caption_sims.get(idx)
             for rank in range(top_k):
                 corpus_idx = topk_indices[idx, rank].item()
                 # 收集 Top-K 检索出来的 caption 及其相似度，供后续打印查看
@@ -473,6 +541,11 @@ class AlignmentTrainer:
                         "image_id": text_image_ids[corpus_idx].item(),
                         "caption": text_captions[corpus_idx],
                         "similarity": topk_values[idx, rank].item(),
+                        "caption_similarity": (
+                            per_hit_caption_sim[rank].item()
+                            if per_hit_caption_sim is not None
+                            else 0.0
+                        ),
                     }
                 )
 

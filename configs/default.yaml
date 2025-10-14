@@ -30,7 +30,7 @@ model:
       enabled: false
       n_classes: 40
   text_encoder:
-    model_path: "/home/chengwenjie/workspace/models/CLIP-ViT-B-32-laion2B-s32B-b82K"
+    model_path: "/home/chengwenjie/workspace/models/CLIP-ViT-B-32-laion2B-s34B-b79K"
 
 train:
   epochs: 150
