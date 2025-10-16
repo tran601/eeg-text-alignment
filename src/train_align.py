@@ -26,13 +26,19 @@ class AlignmentTrainer:
     """
 
     def __init__(self, config_path: str):
-        self.time = (
-            datetime.now().strftime("%Y%m%d_%H%M")
-            + "_proj_head_split_by_image_id_b_32_laion"
-        )
         # 加载配置
         with open(config_path, "r") as f:
             self.config = yaml.safe_load(f)
+
+        loss_type = "sup" if self.config["train"]["loss"]["SupConCrossModal"] else "mp"
+        proj_head = "" if self.config["model"]["eeg_encoder"]["proj_head"] else "out"
+        sample_k = self.config["dataset"]["sample_k"]
+        type = self.config["model"]["text_encoder"]["type"]
+
+        self.time = (
+            datetime.now().strftime("%Y%m%d_%H%M")
+            + f"_{loss_type}_with{proj_head}_proj_head_split_by_image_id_{type}_sample{sample_k}"
+        )
 
         # 设置随机种子
         set_seed(self.config["seed"])
@@ -111,9 +117,14 @@ class AlignmentTrainer:
         )
 
         # 检查点目录
-        self.checkpoint_dir = (
-            Path(self.config.get("checkpoint_dir", "checkpoints")) / self.time
-        )
+        if self.config["train"]["loss"]["SupConCrossModal"]:
+            self.checkpoint_dir = (
+                Path(self.config["checkpoint_dir"]) / "SupConCrossModalLoss" / self.time
+            )
+        else:
+            self.checkpoint_dir = (
+                Path(self.config["checkpoint_dir"]) / "MPNCELoss" / self.time
+            )
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         # 预先构建文本检索字典，便于验证阶段直接复用
@@ -123,7 +134,10 @@ class AlignmentTrainer:
         """初始化并返回日志记录器"""
         logging_cfg = self.config.get("logging", {})
 
-        log_dir = Path(logging_cfg.get("dir", "logs")) / self.time
+        if self.config["train"]["loss"]["SupConCrossModal"]:
+            log_dir = Path(logging_cfg["dir"]) / "SupConCrossModalLoss" / self.time
+        else:
+            log_dir = Path(logging_cfg["dir"]) / "MPNCELoss" / self.time
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / logging_cfg.get("filename", "train_align.log")
 
@@ -358,6 +372,8 @@ class AlignmentTrainer:
 
         top_k = self.config.get("retrieval", {}).get("topk", 5)
         max_examples = self.config.get("retrieval", {}).get("inspect_examples", 5)
+        num_captions = self.config.get("num_captions", {}).get("num_captions", 5)
+        num_captions = num_captions if num_captions <= top_k else top_k
 
         retrieval_metrics, retrieval_examples = self.evaluate_retrieval(
             all_eeg_embeds_tensor,
@@ -365,6 +381,7 @@ class AlignmentTrainer:
             all_captions,
             top_k=top_k,
             max_examples=max_examples,
+            num_captions=num_captions,
         )
 
         # 逐条打印样例，方便肉眼观察检索效果
@@ -415,6 +432,7 @@ class AlignmentTrainer:
         captions: List[List[str]],
         top_k: int = 5,
         max_examples: int = 5,
+        num_captions: int = 5,
     ) -> Tuple[Dict[str, float], List[Dict[str, Any]]]:
         """
         基于预构建的文本字典执行检索评估。
@@ -510,7 +528,7 @@ class AlignmentTrainer:
 
         # 计算多项检索指标
         recall_metrics: Dict[str, float] = {}
-        for k in (1, 3, 5):
+        for k in (1, 5, 10, 50, 100):
             if k > top_k:
                 continue
             hits_at_k = (retrieved_image_ids[:, :k] == image_ids.unsqueeze(1)).any(
@@ -532,7 +550,7 @@ class AlignmentTrainer:
         for idx in range(example_count):
             hits = []
             per_hit_caption_sim = example_caption_sims.get(idx)
-            for rank in range(top_k):
+            for rank in range(num_captions):
                 corpus_idx = topk_indices[idx, rank].item()
                 # 收集 Top-K 检索出来的 caption 及其相似度，供后续打印查看
                 hits.append(
