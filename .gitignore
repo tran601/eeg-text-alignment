@@ -1,13 +1,13 @@
 # 忽略所有文件
 *
 
-# 但不忽略src目录
+# 但不忽略以下目录和文件
 !src/
-
-# 不忽略gitignore文件本身
+!configs/
+!scripts/
+!requirements.txt
 !.gitignore
 
 # 可选：如果需要保留README或其他重要文件，可以在这里添加
 # !README.md
 # !LICENSE
-# !requirements.txt
