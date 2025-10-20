@@ -1,20 +1,17 @@
 import torch
 import numpy as np
-import time
-import os
-from typing import List, Optional
+
 from transformers import CLIPModel, CLIPTokenizerFast
 
 
 class CLIPTextEncoder:
     """
     CLIP文本编码器
-    使用Stable Diffusion管道内部的tokenizer和text_encoder进行文本编码
     """
 
     def __init__(
         self,
-        model_path: str = "/home/chengwenjie/workspace/models/CLIP-ViT-B-32-laion2B-s34B-b79K",
+        model_path: str = "/home/chengwenjie/workspace/models/clip-vit-large-patch14",
         torch_dtype: torch.dtype = torch.float32,
     ):
         """
@@ -28,9 +25,9 @@ class CLIPTextEncoder:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.torch_dtype = torch_dtype
 
-        # 使用laion CLIP模型
         self.text_encoder = CLIPModel.from_pretrained(model_path)
         self.tokenizer = CLIPTokenizerFast.from_pretrained(model_path)
+
         self.text_encoder = self.text_encoder.to(self.device, dtype=self.torch_dtype)
         self.text_encoder.eval()
 
@@ -53,6 +50,7 @@ class CLIPTextEncoder:
             return_tensors="pt",
         ).to(self.device)
 
+        # EOT pool
         sentence_vector = self.text_encoder.get_text_features(**inputs)
 
         return sentence_vector
