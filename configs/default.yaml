@@ -1,10 +1,10 @@
 seed: 42
 device: "cuda"
 val: 5
-checkpoint_dir: "checkpoints/MPNCELoss"
+checkpoint_dir: "checkpoints"
 
 logging:
-  dir: "logs/MPNCELoss"
+  dir: "logs"
   filename: "train_align.log"
   console: false
   level: "INFO"
@@ -16,7 +16,7 @@ dataset:
   train_data: "train.pth"
   val_data: "val.pth"
   caption_name: "qwen3vl_multi_caption.json"
-  sample_k: 4
+  sample_k: 1
 
 model:
   eeg_encoder:
@@ -25,15 +25,17 @@ model:
     ts_conv: [256,512]
     proj_dim: 512
     proj_head: true
+    proj_head_dim: 512
     dropout: 0.1
     class_head:
       enabled: false
       n_classes: 40
   text_encoder:
+    type: "b32" # sd,b32,l14
     model_path: "/home/chengwenjie/workspace/models/CLIP-ViT-B-32-laion2B-s34B-b79K"
 
 train:
-  epochs: 150
+  epochs: 180
   batch_size: 192
   lr: 0.0001
   weight_decay: 0.0001
@@ -51,6 +53,7 @@ train:
       l2_normalize: true
 
 retrieval:
-  topk: 10  # 初始检索top-k
-  caption_corpus_path: "/home/chengwenjie/datasets/40classes-50images/embedding/ViT_B_32_caption_embeddings.pth"  # Caption嵌入字典
-  inspect_examples: 4  # 验证阶段打印的样例数量
+  topk: 100  # 初始检索top-k
+  caption_corpus_path: "/home/chengwenjie/datasets/40classes-50images/embedding/baseline_b32_caption_embeddings.pth"  # Caption嵌入字典
+  inspect_examples: 2  # 验证阶段打印的样例数量
+  num_captions: 5
