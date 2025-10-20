@@ -74,6 +74,7 @@ class EEGDataset(Dataset):
         img_name = data_item["image"]
         image_path = os.path.join(self.root, "images", data_item["label"], img_name)
         caption = random.sample(self.captions[image_path], self.sample_k)
+        # caption = [self.captions[image_path][0]]
 
         return {
             "eeg_data": eeg_data,

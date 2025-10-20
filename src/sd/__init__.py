@@ -1,5 +1,5 @@
 """
-Stable Diffusion模块
+Stable Diffusion集成模块
 包含EEG到图像生成的管道
 """
 
