@@ -36,7 +36,6 @@ def flatten_captions(
                 flattened.append((path, captions))
     return flattened
 
-
 def encode_captions(
     text_encoder: CLIPTextEncoder,
     texts: List[str],
@@ -52,7 +51,6 @@ def encode_captions(
         batch_array = text_encoder.encode_sentence(batch_texts)
         embeddings.append(batch_array)
     return torch.cat(embeddings, dim=0)
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export caption embeddings.")
@@ -85,7 +83,6 @@ def parse_args() -> argparse.Namespace:
         help="Number of captions per encoding batch.",
     )
     return parser.parse_args()
-
 
 def main() -> None:
     args = parse_args()
